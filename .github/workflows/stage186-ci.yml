@@ -1,0 +1,55 @@
+name: stage186-ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  qsp-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . || true
+
+      - name: Claim lint (A2-A5 presence + structure)
+        run: |
+          python tools/ci_claim_lint.py
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run attack matrix (docker compose)
+        run: |
+          bash tools/ci_run_matrix.sh
+
+      - name: Gate summary + sync root summary.md
+        run: |
+          python tools/ci_summary_gate.py
+
+      - name: Upload artifacts (reports/proof)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage186-artifacts
+          path: |
+            out/reports/**
+            proof/**
+            summary.md
+          if-no-files-found: warn
