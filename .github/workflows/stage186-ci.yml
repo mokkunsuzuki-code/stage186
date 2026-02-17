@@ -35,13 +35,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # IMPORTANT: do not stop job here; we want artifacts even on failure.
       - name: Run attack matrix (docker compose)
+        continue-on-error: true
         run: |
           bash tools/ci_run_matrix.sh
 
       - name: Gate summary + sync root summary.md
         run: |
           python tools/ci_summary_gate.py
+
+      - name: Debug tree (always)
+        if: always()
+        run: |
+          echo "=== ls out ==="
+          ls -la out || true
+          echo "=== ls out/reports ==="
+          ls -la out/reports || true
+          echo "=== head summary ==="
+          sed -n '1,80p' out/reports/summary.md || true
 
       - name: Upload artifacts (reports/proof)
         if: always()
@@ -53,3 +65,14 @@ jobs:
             proof/**
             summary.md
           if-no-files-found: warn
+
+      # Fail at the end if matrix failed (based on out/reports/matrix.exit)
+      - name: Fail job if matrix failed
+        run: |
+          rc="$(cat out/reports/matrix.exit 2>/dev/null || echo 99)"
+          echo "matrix.exit=${rc}"
+          if [ "${rc}" -ne 0 ]; then
+            echo "[FAIL] matrix failed (exit=${rc})"
+            exit 1
+          fi
+          echo "[OK] matrix passed"
