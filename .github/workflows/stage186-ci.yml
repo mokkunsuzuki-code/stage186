@@ -29,16 +29,37 @@ jobs:
         run: |
           python tools/ci_claim_lint.py
 
-      - name: Install Docker Compose (plugin + legacy)
+      # ★ここがポイント：apt-get が死んでも止めない（exit=100対策）
+      - name: Try install docker compose (non-blocking)
+        continue-on-error: true
         run: |
           sudo apt-get update
           sudo apt-get install -y docker-compose-plugin docker-compose
 
-      - name: Show docker versions
+      # ★compose が無ければ curl で docker-compose を入れる（軽量で安定）
+      - name: Ensure Compose available
         run: |
+          set -euo pipefail
           docker --version || true
-          docker compose version || true
-          docker-compose --version || true
+
+          if docker compose version >/dev/null 2>&1; then
+            echo "[OK] docker compose is available"
+            docker compose version
+            exit 0
+          fi
+
+          if command -v docker-compose >/dev/null 2>&1; then
+            echo "[OK] docker-compose is available"
+            docker-compose --version
+            exit 0
+          fi
+
+          echo "[WARN] compose not found; installing docker-compose via curl..."
+          sudo curl -L \
+            "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64" \
+            -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
 
       - name: Run attack matrix (always produce evidence)
         continue-on-error: true
@@ -46,6 +67,7 @@ jobs:
           bash tools/ci_run_matrix.sh
 
       - name: Ensure summary exists (sync to root)
+        continue-on-error: true
         run: |
           python tools/ci_summary_gate.py
 
@@ -59,6 +81,7 @@ jobs:
             summary.md
           if-no-files-found: ignore
 
+      # 🔴 最後に「意味あるFAIL」にする
       - name: Final CI decision (fail with evidence)
         run: |
           rc=$(cat out/reports/matrix.exit 2>/dev/null || echo 1)
