@@ -96,3 +96,18 @@ No external dependencies required.
 
 📜 License
 MIT License © 2025 Motohiro Suzuki
+---
+
+# 🟣 Internet-Draft (Stage186)
+
+An informational Internet-Draft style document is available:
+
+`docs/draft-qsp-stage186-00.md`
+
+This draft formalizes:
+
+- Security Claims (A1–A5)
+- CI Evidence Model
+- Non-goals and scope boundaries
+- Implementation status
+
