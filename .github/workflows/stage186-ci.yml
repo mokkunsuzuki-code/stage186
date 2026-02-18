@@ -9,7 +9,7 @@ on:
 jobs:
   qsp-ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -25,7 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e . || true
 
-      - name: Claim lint
+      - name: Claim lint (informational)
         run: |
           python tools/ci_claim_lint.py
 
@@ -34,37 +34,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-compose
 
-      - name: Check docker versions
+      - name: Show docker versions
         run: |
           docker --version
           docker-compose --version
 
+      # 🔵 実行しても止めない
       - name: Run attack matrix
         continue-on-error: true
         run: |
-          bash tools/ci_run_matrix.sh || true
+          bash tools/ci_run_matrix.sh
 
-      - name: Gate summary
+      - name: Ensure summary exists
         run: |
-          python tools/ci_summary_gate.py || true
+          python tools/ci_summary_gate.py
 
-      # 🔥 ここを修正：ファイル存在チェックを先に行う
-      - name: Upload artifacts (safe)
+      - name: Upload artifacts
         if: always()
-        run: |
-          if [ -d "out/reports" ]; then
-            echo "Reports exist"
-          else
-            echo "No reports directory"
-          fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage186-artifacts
+          path: |
+            out/reports/**
+            summary.md
+          if-no-files-found: ignore
 
-      - name: Final result
+      # 🔴 最後に本当に落とす
+      - name: Final CI decision
         run: |
-          if [ -f "out/reports/matrix.exit" ]; then
-            rc=$(cat out/reports/matrix.exit)
-            if [ "$rc" -ne 0 ]; then
-              echo "Matrix failed (exit=$rc)"
-              exit 1
-            fi
+          rc=$(cat out/reports/matrix.exit 2>/dev/null || echo 1)
+          echo "matrix.exit=${rc}"
+          if [ "$rc" -ne 0 ]; then
+            echo "❌ CI FAIL: matrix failed"
+            exit 1
           fi
-          echo "Stage186 completed"
+          echo "✅ CI PASS"
