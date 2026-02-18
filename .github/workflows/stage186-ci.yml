@@ -29,7 +29,6 @@ jobs:
         run: |
           python tools/ci_claim_lint.py
 
-      # ✅ apt-get は完全に使わない（exit 100 根絶）
       - name: Ensure Compose available (curl fixed)
         run: |
           set -euo pipefail
@@ -64,6 +63,32 @@ jobs:
         run: |
           python tools/ci_summary_gate.py
 
+      # 🔎 追加：CIログ上で状況を確定させる
+      - name: Debug outputs (always)
+        if: always()
+        run: |
+          echo "=== PWD ==="
+          pwd
+          echo "=== ls -la ==="
+          ls -la
+          echo "=== find out (maxdepth 4) ==="
+          find out -maxdepth 4 -type f -print || true
+          echo "=== out/reports listing ==="
+          ls -la out/reports || true
+          echo "=== matrix.exit ==="
+          cat out/reports/matrix.exit 2>/dev/null || echo "(no matrix.exit)"
+          echo "=== summary.md (out/reports/summary.md) ==="
+          cat out/reports/summary.md 2>/dev/null || echo "(no out/reports/summary.md)"
+          echo "=== matrix.log head/tail ==="
+          if [ -f out/reports/matrix.log ]; then
+            echo "--- head ---"
+            sed -n '1,40p' out/reports/matrix.log
+            echo "--- tail ---"
+            tail -n 60 out/reports/matrix.log
+          else
+            echo "(no out/reports/matrix.log)"
+          fi
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,7 +104,7 @@ jobs:
           rc=$(cat out/reports/matrix.exit 2>/dev/null || echo 1)
           echo "matrix.exit=${rc}"
           if [ "$rc" -ne 0 ]; then
-            echo "❌ CI FAIL: matrix failed (see artifacts)"
+            echo "❌ CI FAIL: matrix failed (see artifacts/logs above)"
             exit 1
           fi
           echo "✅ CI PASS"
