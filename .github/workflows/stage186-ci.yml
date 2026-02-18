@@ -23,7 +23,6 @@ jobs:
           : > out/reports/matrix.log
           printf "%s\n" "# Stage186 CI Summary" "- matrix: UNKNOWN (placeholder)" > out/reports/summary.md
           : > out/reports/debug.txt
-          echo "[init] placeholders created" >> out/reports/debug.txt
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,60 +33,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . || true
+          python -m pip install pytest || true
 
       - name: Claim lint (informational)
         continue-on-error: true
         run: |
           python tools/ci_claim_lint.py | tee -a out/reports/debug.txt
 
-      - name: Ensure Compose available (non-blocking)
+      - name: Run matrix (docker if exists, else pytest)
         continue-on-error: true
         run: |
-          set -euo pipefail
-          docker --version || true
-
-          if docker compose version >/dev/null 2>&1; then
-            echo "[OK] docker compose available" | tee -a out/reports/debug.txt
-            docker compose version | tee -a out/reports/debug.txt
-            exit 0
-          fi
-
-          if command -v docker-compose >/dev/null 2>&1; then
-            echo "[OK] docker-compose available" | tee -a out/reports/debug.txt
-            docker-compose --version | tee -a out/reports/debug.txt
-            exit 0
-          fi
-
-          echo "[WARN] compose not found; trying curl install..." | tee -a out/reports/debug.txt
-          sudo curl -L "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version | tee -a out/reports/debug.txt
-
-      - name: Run attack matrix (always produce evidence)
-        continue-on-error: true
-        run: |
-          echo "[run] ci_run_matrix.sh start" | tee -a out/reports/debug.txt
-          bash tools/ci_run_matrix.sh || true
-          echo "[run] ci_run_matrix.sh end" | tee -a out/reports/debug.txt
+          bash tools/ci_run_matrix.sh | tee -a out/reports/debug.txt
 
       - name: Ensure summary exists (sync to root)
         continue-on-error: true
         run: |
           python tools/ci_summary_gate.py || true
-
-      - name: Debug outputs (always)
-        if: always()
-        run: |
-          {
-            echo "=== ls -la out/reports ==="
-            ls -la out/reports || true
-            echo "=== matrix.exit ==="
-            cat out/reports/matrix.exit || true
-            echo "=== summary.md ==="
-            cat out/reports/summary.md || true
-            echo "=== matrix.log tail ==="
-            tail -n 120 out/reports/matrix.log || true
-          } | tee -a out/reports/debug.txt
 
       - name: Print debug.txt (always)
         if: always()
