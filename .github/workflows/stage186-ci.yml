@@ -29,23 +29,23 @@ jobs:
         run: |
           python tools/ci_claim_lint.py
 
-      - name: Install Docker Compose
+      - name: Install Docker Compose (plugin + legacy)
         run: |
           sudo apt-get update
-          sudo apt-get install -y docker-compose
+          sudo apt-get install -y docker-compose-plugin docker-compose
 
       - name: Show docker versions
         run: |
-          docker --version
-          docker-compose --version
+          docker --version || true
+          docker compose version || true
+          docker-compose --version || true
 
-      # 🔵 実行しても止めない
-      - name: Run attack matrix
+      - name: Run attack matrix (always produce evidence)
         continue-on-error: true
         run: |
           bash tools/ci_run_matrix.sh
 
-      - name: Ensure summary exists
+      - name: Ensure summary exists (sync to root)
         run: |
           python tools/ci_summary_gate.py
 
@@ -59,13 +59,12 @@ jobs:
             summary.md
           if-no-files-found: ignore
 
-      # 🔴 最後に本当に落とす
-      - name: Final CI decision
+      - name: Final CI decision (fail with evidence)
         run: |
           rc=$(cat out/reports/matrix.exit 2>/dev/null || echo 1)
           echo "matrix.exit=${rc}"
           if [ "$rc" -ne 0 ]; then
-            echo "❌ CI FAIL: matrix failed"
+            echo "❌ CI FAIL: matrix failed (see artifacts)"
             exit 1
           fi
           echo "✅ CI PASS"
