@@ -15,106 +15,187 @@ author:
 
 # Abstract
 
-This document describes Stage186 of the Quantum-Safe Protocol (QSP),
-focusing on two primary goals:
+This document specifies Stage186 of the Quantum-Safe Protocol (QSP).
+Stage186 introduces structured Security Claim visibility and a
+fail-with-evidence Continuous Integration (CI) model.
 
-1. Security Claim Visibility (A2–A5)
-2. Continuous Integration (CI) Evidence Preservation
-
-Stage186 does not introduce new cryptographic primitives.
-Instead, it formalizes claim presentation and ensures CI failures
-produce verifiable artifacts.
+The primary contribution of this stage is not cryptographic innovation,
+but explicit attack-model articulation and evidence-preserving CI behavior.
 
 # Status of This Memo
 
-This Internet-Draft is submitted for documentation and review purposes.
-It is not an IETF working group item.
+This Internet-Draft is provided for independent review and documentation.
+It is not an IETF working group document.
 
 # 1. Introduction
 
-QSP (Quantum-Safe Protocol) is a hybrid protocol design aiming to
-combine post-quantum cryptographic techniques with structured lifecycle control.
+QSP is a structured hybrid protocol framework targeting lifecycle clarity,
+fail-closed semantics, and attack-surface reduction.
 
-Stage186 introduces structured claim visibility and fail-with-evidence CI behavior.
+Stage186 formalizes:
+
+- Security Claims (A1–A5)
+- Artifact-preserving CI
+- Explicit attack-model categorization
+- Declared non-goals
 
 # 2. Terminology
 
 - **Epoch**: A strictly increasing lifecycle version identifier.
-- **Handshake**: The process that establishes session validity.
-- **Fail-closed**: Immediate termination on validation failure.
-- **Matrix**: The CI validation execution (docker or pytest fallback).
+- **Handshake**: Session establishment phase.
+- **Fail-closed**: Terminate immediately on validation failure.
+- **Matrix**: CI validation execution (docker or pytest fallback).
+- **Artifact**: CI-generated log, summary, or machine-readable exit code.
 
-# 3. Protocol Overview (Stage186 Scope)
+# 3. Declared Security Claims
 
-Stage186 does not modify handshake or cryptographic primitives.
-Instead, it standardizes:
+A1 – Fail-Closed Semantics  
+A2 – Handshake Gating  
+A3 – Epoch Monotonicity  
+A4 – Session Binding  
+A5 – Key Separation  
 
-- Claims documentation (A1–A5)
-- CI enforcement of artifact generation
-- Machine-readable exit codes (`matrix.exit`)
-- Human-readable summary (`summary.md`)
-- Log preservation (`matrix.log`)
+Claims are descriptive at this stage and connected to CI visibility.
 
-# 4. Security Claims
+# 4. Security Considerations (Attack Model Classification)
 
-The following claims are declared:
+This section explicitly defines attack categories and Stage186 behavior.
 
-## A1 – Fail-Closed Semantics
+---
 
-If validation fails, the session MUST terminate.
+## 4.1 Replay Attacks
 
-## A2 – Handshake Gating
+Threat:
+An attacker replays previously valid protocol messages.
 
-Application data MUST NOT be accepted before handshake completion.
+Mitigation Scope:
+- Epoch monotonicity (A3) conceptually prevents rollback.
+- CI preserves logs for replay scenario inspection.
 
-## A3 – Epoch Monotonicity
+Limitations:
+- No formal replay proof is included in Stage186.
 
-Epoch values MUST strictly increase and rollback MUST be rejected.
+---
 
-## A4 – Session Binding
+## 4.2 Epoch Rollback / Regression
 
-Messages MUST be bound to the correct session context.
+Threat:
+Forcing the protocol to accept a previous lifecycle state.
 
-## A5 – Key Separation
+Mitigation Scope:
+- Epoch MUST increase (A3).
+- CI matrix ensures visible failure if logic breaks.
 
-Keys from different epochs or contexts MUST remain separated.
+Limitations:
+- Enforcement depends on future implementation integration.
 
-# 5. Security Considerations
+---
 
-Stage186 ensures:
+## 4.3 Session Mix-Up
 
-- CI failures preserve verifiable evidence.
-- Claims are visible to reviewers.
-- Exit codes are deterministic and machine-readable.
-- Artifact preservation is mandatory.
+Threat:
+Messages from one session are accepted in another context.
 
-Stage186 does not claim formal cryptographic proof.
-Proof integration is deferred to later stages.
+Mitigation Scope:
+- Session Binding claim (A4).
+- Documented as invariant in claims table.
 
-# 6. Non-Goals
+Limitations:
+- No symbolic proof integrated in this stage.
+
+---
+
+## 4.4 Pre-Handshake Injection
+
+Threat:
+Application data accepted before authentication.
+
+Mitigation Scope:
+- Handshake Gating claim (A2).
+- CI ensures invariant breakage produces artifacts.
+
+---
+
+## 4.5 Key Reuse / Cross-Epoch Leakage
+
+Threat:
+Key material reused across epochs or contexts.
+
+Mitigation Scope:
+- Key Separation claim (A5).
+- Explicit documentation of separation requirement.
+
+---
+
+## 4.6 Downgrade Attacks
+
+Threat:
+Forcing weaker operational mode.
+
+Mitigation Scope:
+- Fail-closed semantics (A1).
+- CI ensures downgrade failure is logged.
+
+Limitations:
+- No cryptographic downgrade detection proof provided.
+
+---
+
+## 4.7 CI Bypass Risks
+
+Threat:
+Failure occurs but CI hides or overwrites evidence.
+
+Mitigation Scope:
+- `matrix.exit` machine-readable result.
+- Mandatory artifact upload.
+- Summary gate enforcement.
+
+Stage186 explicitly defends against silent CI failure.
+
+---
+
+## 4.8 Artifact Tampering
+
+Threat:
+Generated logs are modified or lost.
+
+Mitigation Scope:
+- GitHub artifact immutability.
+- Deterministic exit codes.
+
+Out of Scope:
+- External artifact integrity proof.
+
+---
+
+# 5. Non-Goals
 
 Stage186 does NOT:
 
-- Introduce new cryptographic algorithms.
 - Provide formal symbolic proofs.
+- Introduce new cryptographic primitives.
 - Guarantee quantum attack resistance.
-- Modify handshake structure.
+- Modify handshake internals.
 
-# 7. Implementation Status
+# 6. Implementation Status
 
-The following components are implemented:
+Implemented components:
 
 - CI workflow: `.github/workflows/stage186-ci.yml`
 - Matrix runner: `tools/ci_run_matrix.sh`
 - Pytest fallback: `tools/ci_matrix_pytest.sh`
-- Claims document: `claims/CLAIMS.md`
+- Claims table: `claims/CLAIMS.md`
 - Smoke tests: `tests/test_stage186_smoke.py`
 
-# 8. IANA Considerations
+# 7. IANA Considerations
 
-This document has no IANA actions.
+No IANA actions required.
 
-# 9. References
+# 8. Conclusion
 
-No normative external references are included in this stage.
+Stage186 transitions QSP from informal documentation to
+attack-aware structured specification with evidence-preserving CI.
+
+The stage prioritizes reviewer transparency over cryptographic novelty.
 
