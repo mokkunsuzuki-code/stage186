@@ -29,7 +29,9 @@ jobs:
         run: |
           python tools/ci_claim_lint.py
 
-      - name: Ensure Compose available (curl fixed)
+      # ✅ ここを non-blocking にする（ここで落ちて証拠が作れないのを防ぐ）
+      - name: Ensure Compose available (non-blocking)
+        continue-on-error: true
         run: |
           set -euo pipefail
           docker --version || true
@@ -46,13 +48,14 @@ jobs:
             exit 0
           fi
 
-          echo "[INFO] compose not found; installing docker-compose via curl..."
+          echo "[WARN] compose not found; try installing docker-compose via curl..."
           sudo curl -L \
             "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64" \
             -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
 
+      # ✅ これが本体：compose が無くても ci_run_matrix.sh が証拠を作る
       - name: Run attack matrix (always produce evidence)
         continue-on-error: true
         run: |
@@ -63,7 +66,7 @@ jobs:
         run: |
           python tools/ci_summary_gate.py
 
-      # 🔎 追加：CIログ上で状況を確定させる
+      # 🔎 追加：CIログ上で状況を確定
       - name: Debug outputs (always)
         if: always()
         run: |
