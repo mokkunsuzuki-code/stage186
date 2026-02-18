@@ -17,13 +17,11 @@ jobs:
 
       - name: Init evidence placeholders
         run: |
+          set -e
           mkdir -p out/reports proof
           echo "98" > out/reports/matrix.exit
           : > out/reports/matrix.log
-          cat > out/reports/summary.md << 'S'
-# Stage186 CI Summary
-- matrix: UNKNOWN (placeholder)
-S
+          printf "%s\n" "# Stage186 CI Summary" "- matrix: UNKNOWN (placeholder)" > out/reports/summary.md
           : > out/reports/debug.txt
           echo "[init] placeholders created" >> out/reports/debug.txt
 
@@ -61,9 +59,7 @@ S
           fi
 
           echo "[WARN] compose not found; trying curl install..." | tee -a out/reports/debug.txt
-          sudo curl -L \
-            "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64" \
-            -o /usr/local/bin/docker-compose
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version | tee -a out/reports/debug.txt
 
@@ -93,7 +89,6 @@ S
             tail -n 120 out/reports/matrix.log || true
           } | tee -a out/reports/debug.txt
 
-      # ★追加：debug.txt を Actionsログにそのまま出す（最強の外部レビューUX）
       - name: Print debug.txt (always)
         if: always()
         run: |
