@@ -15,6 +15,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ★最重要：最初に「証拠の器」を必ず作る（ここで落ちない）
+      - name: Init evidence placeholders
+        run: |
+          mkdir -p out/reports proof
+          echo "98" > out/reports/matrix.exit
+          : > out/reports/matrix.log
+          cat > out/reports/summary.md << 'S'
+# Stage186 CI Summary
+- matrix: UNKNOWN (placeholder)
+S
+          : > out/reports/debug.txt
+          echo "[init] evidence placeholders created" >> out/reports/debug.txt
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -26,10 +39,11 @@ jobs:
           python -m pip install -e . || true
 
       - name: Claim lint (informational)
+        continue-on-error: true
         run: |
-          python tools/ci_claim_lint.py
+          python tools/ci_claim_lint.py | tee -a out/reports/debug.txt
 
-      # ✅ ここを non-blocking にする（ここで落ちて証拠が作れないのを防ぐ）
+      # compose は non-blocking（失敗しても次へ）
       - name: Ensure Compose available (non-blocking)
         continue-on-error: true
         run: |
@@ -37,61 +51,53 @@ jobs:
           docker --version || true
 
           if docker compose version >/dev/null 2>&1; then
-            echo "[OK] docker compose is available"
-            docker compose version
+            echo "[OK] docker compose is available" | tee -a out/reports/debug.txt
+            docker compose version | tee -a out/reports/debug.txt
             exit 0
           fi
 
           if command -v docker-compose >/dev/null 2>&1; then
-            echo "[OK] docker-compose is available"
-            docker-compose --version
+            echo "[OK] docker-compose is available" | tee -a out/reports/debug.txt
+            docker-compose --version | tee -a out/reports/debug.txt
             exit 0
           fi
 
-          echo "[WARN] compose not found; try installing docker-compose via curl..."
+          echo "[WARN] compose not found; try installing docker-compose via curl..." | tee -a out/reports/debug.txt
           sudo curl -L \
             "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64" \
             -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+          docker-compose --version | tee -a out/reports/debug.txt
 
-      # ✅ これが本体：compose が無くても ci_run_matrix.sh が証拠を作る
+      # ★ここで必ず ci_run_matrix.sh を走らせる（失敗しても止めない）
       - name: Run attack matrix (always produce evidence)
         continue-on-error: true
         run: |
-          bash tools/ci_run_matrix.sh
+          echo "[run] starting ci_run_matrix.sh" | tee -a out/reports/debug.txt
+          bash tools/ci_run_matrix.sh || true
+          echo "[run] finished ci_run_matrix.sh" | tee -a out/reports/debug.txt
 
       - name: Ensure summary exists (sync to root)
         continue-on-error: true
         run: |
-          python tools/ci_summary_gate.py
+          python tools/ci_summary_gate.py || true
 
-      # 🔎 追加：CIログ上で状況を確定
+      # ★ログで確定できるように out/reports を必ず表示
       - name: Debug outputs (always)
         if: always()
         run: |
-          echo "=== PWD ==="
-          pwd
-          echo "=== ls -la ==="
-          ls -la
-          echo "=== find out (maxdepth 4) ==="
-          find out -maxdepth 4 -type f -print || true
-          echo "=== out/reports listing ==="
-          ls -la out/reports || true
-          echo "=== matrix.exit ==="
-          cat out/reports/matrix.exit 2>/dev/null || echo "(no matrix.exit)"
-          echo "=== summary.md (out/reports/summary.md) ==="
-          cat out/reports/summary.md 2>/dev/null || echo "(no out/reports/summary.md)"
-          echo "=== matrix.log head/tail ==="
-          if [ -f out/reports/matrix.log ]; then
-            echo "--- head ---"
-            sed -n '1,40p' out/reports/matrix.log
-            echo "--- tail ---"
-            tail -n 60 out/reports/matrix.log
-          else
-            echo "(no out/reports/matrix.log)"
-          fi
+          {
+            echo "=== ls -la out/reports ==="
+            ls -la out/reports || true
+            echo "=== matrix.exit ==="
+            cat out/reports/matrix.exit || true
+            echo "=== summary.md ==="
+            cat out/reports/summary.md || true
+            echo "=== matrix.log tail ==="
+            tail -n 80 out/reports/matrix.log || true
+          } | tee -a out/reports/debug.txt
 
+      # ★Artifacts は必ず上がる（placeholders があるので）
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -102,12 +108,13 @@ jobs:
             summary.md
           if-no-files-found: ignore
 
+      # ★最後に意味ある FAIL
       - name: Final CI decision (fail with evidence)
         run: |
           rc=$(cat out/reports/matrix.exit 2>/dev/null || echo 1)
           echo "matrix.exit=${rc}"
           if [ "$rc" -ne 0 ]; then
-            echo "❌ CI FAIL: matrix failed (see artifacts/logs above)"
+            echo "❌ CI FAIL: matrix failed (see stage186-artifacts)"
             exit 1
           fi
           echo "✅ CI PASS"
