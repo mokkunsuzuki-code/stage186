@@ -15,7 +15,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ★最重要：最初に「証拠の器」を必ず作る（ここで落ちない）
       - name: Init evidence placeholders
         run: |
           mkdir -p out/reports proof
@@ -26,7 +25,7 @@ jobs:
 - matrix: UNKNOWN (placeholder)
 S
           : > out/reports/debug.txt
-          echo "[init] evidence placeholders created" >> out/reports/debug.txt
+          echo "[init] placeholders created" >> out/reports/debug.txt
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,7 +42,6 @@ S
         run: |
           python tools/ci_claim_lint.py | tee -a out/reports/debug.txt
 
-      # compose は non-blocking（失敗しても次へ）
       - name: Ensure Compose available (non-blocking)
         continue-on-error: true
         run: |
@@ -51,38 +49,36 @@ S
           docker --version || true
 
           if docker compose version >/dev/null 2>&1; then
-            echo "[OK] docker compose is available" | tee -a out/reports/debug.txt
+            echo "[OK] docker compose available" | tee -a out/reports/debug.txt
             docker compose version | tee -a out/reports/debug.txt
             exit 0
           fi
 
           if command -v docker-compose >/dev/null 2>&1; then
-            echo "[OK] docker-compose is available" | tee -a out/reports/debug.txt
+            echo "[OK] docker-compose available" | tee -a out/reports/debug.txt
             docker-compose --version | tee -a out/reports/debug.txt
             exit 0
           fi
 
-          echo "[WARN] compose not found; try installing docker-compose via curl..." | tee -a out/reports/debug.txt
+          echo "[WARN] compose not found; trying curl install..." | tee -a out/reports/debug.txt
           sudo curl -L \
             "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64" \
             -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version | tee -a out/reports/debug.txt
 
-      # ★ここで必ず ci_run_matrix.sh を走らせる（失敗しても止めない）
       - name: Run attack matrix (always produce evidence)
         continue-on-error: true
         run: |
-          echo "[run] starting ci_run_matrix.sh" | tee -a out/reports/debug.txt
+          echo "[run] ci_run_matrix.sh start" | tee -a out/reports/debug.txt
           bash tools/ci_run_matrix.sh || true
-          echo "[run] finished ci_run_matrix.sh" | tee -a out/reports/debug.txt
+          echo "[run] ci_run_matrix.sh end" | tee -a out/reports/debug.txt
 
       - name: Ensure summary exists (sync to root)
         continue-on-error: true
         run: |
           python tools/ci_summary_gate.py || true
 
-      # ★ログで確定できるように out/reports を必ず表示
       - name: Debug outputs (always)
         if: always()
         run: |
@@ -94,10 +90,17 @@ S
             echo "=== summary.md ==="
             cat out/reports/summary.md || true
             echo "=== matrix.log tail ==="
-            tail -n 80 out/reports/matrix.log || true
+            tail -n 120 out/reports/matrix.log || true
           } | tee -a out/reports/debug.txt
 
-      # ★Artifacts は必ず上がる（placeholders があるので）
+      # ★追加：debug.txt を Actionsログにそのまま出す（最強の外部レビューUX）
+      - name: Print debug.txt (always)
+        if: always()
+        run: |
+          echo "========== out/reports/debug.txt =========="
+          cat out/reports/debug.txt || true
+          echo "==========================================="
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -105,16 +108,14 @@ S
           name: stage186-artifacts
           path: |
             out/reports/**
-            summary.md
-          if-no-files-found: ignore
+          if-no-files-found: error
 
-      # ★最後に意味ある FAIL
       - name: Final CI decision (fail with evidence)
         run: |
           rc=$(cat out/reports/matrix.exit 2>/dev/null || echo 1)
           echo "matrix.exit=${rc}"
           if [ "$rc" -ne 0 ]; then
-            echo "❌ CI FAIL: matrix failed (see stage186-artifacts)"
+            echo "❌ CI FAIL: matrix failed (see logs/artifacts)"
             exit 1
           fi
           echo "✅ CI PASS"
